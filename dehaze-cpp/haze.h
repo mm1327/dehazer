@@ -26,7 +26,7 @@ public:
      *      dark_kernel  3 ~ 20
      *      e            0.0~0.00001
      ******************/
-    void set_param( float st_percent, float min_trans, int guide_kernel, int dark_kernel, float e );
+    void set_param( float st_percent, float min_trans, int guide_kernel, int dark_kernel, float gammaGain );
 
 private:
     float percent;
@@ -34,13 +34,15 @@ private:
     int guidedKernel;
     int darkKernel;
     float guidedE;
+    float gammaGain;
 
 protected:
     void dark_channel( cv::Mat &image, cv::Mat &dc_img, int kernel_size = 5 );
-    void get_atmo(cv::Mat &gray_image, float &atmo_mena, float percent = 0.01 );
+    void get_atmo(cv::Mat &gray_image, float &atmo_mena, float &avg_mean, float percent = 0.01 );
     void get_trans( cv::Mat &image, cv::Mat &image_t, float atom, float w = 0.95 );
     void guided_filter(cv::Mat &trans_image, cv::Mat &guidance_image, cv::Mat &filter_image, int kernel_r, float e );
     void hist_gray( const cv::Mat &gray_image, cv::Mat &hist );
+    void gamma_lut( const cv::Mat &input_image, cv::Mat &out_image, float gamma );
 };
 
 #endif // HAZE_H

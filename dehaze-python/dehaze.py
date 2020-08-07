@@ -2,6 +2,7 @@
 import cv2
 import numpy as np
 import argparse
+import glob
 
 
 def dark_channel(img, size = 7):
@@ -16,7 +17,10 @@ def get_atmo(img, percent =0.1):
     mean_perpix = np.mean(img, axis = 2).reshape(-1)
     mean_perpix = np.sort(mean_perpix)
     mean_topper = mean_perpix[int(img.shape[0] * img.shape[1] * (1-percent) ):]
-    return np.mean(mean_topper)
+
+    atmo = np.mean(mean_topper)
+    avg_bir =  np.mean(mean_perpix)
+    return atmo, avg_bir
 
 
 def get_trans(img, atom, w = 0.95):
@@ -58,39 +62,57 @@ def dehaze(path, output = None, is_save = True):
     img = im.astype('float64') / 255
     img_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY).astype('float64') / 255
 
-    atom = get_atmo(img)
+    atom, avg_bir = get_atmo(img)
 
     trans = get_trans(img, atom)
-    trans_guided = guided_filter(trans, img_gray, 10, 0.0001)
+    trans_guided = guided_filter(trans, img_gray, 5, 0.0001)
     trans_guided = cv2.max(trans_guided, 0.25)
 
     result = np.empty_like(img)
     for i in range(3):
         result[:, :, i] = (img[:, :, i] - atom) / trans_guided + atom
+    result = result*255
+    result[result[:,:,:] > 255] = 255
+    result[result[:,:,:] < 0] = 0
+    result = result.astype('uint8')
+    gamma = 1.0 - 0.8 * ( atom - avg_bir )
+    lut_table = [0]*256
+
+    for i in range(256):
+        lut_table[i] = pow( i / 255.0, gamma ) * 255.0
+    n_lut = np.array(lut_table).clip(0,255).astype('uint8')
+    lut = np.dstack((n_lut, n_lut, n_lut))
+
+    result = cv2.LUT(result, lut) 
 
     cv2.imshow("source",img)
     cv2.imshow("result", result)
-    cv2.waitKey()
+    cv2.waitKey(3000)
     
     if output is not None and is_save:
-        cv2.imwrite(output, result * 255)
+        name_sp = path.split('/')[-1]
+        save_path = output + '/' + name_sp
+        cv2.imwrite(save_path, result)
+
+    
 
 
-default_image = 'foggyHouse.jpg'
-src_path = 'image/'
-result_path = 'result02/'
+
+default_image = 'channel_01.jpg'
+src_path = 'dehaze-python/image/*'
+result_path = 'dehaze-python/result02/'
 src_image = src_path + default_image
 result_image = result_path + default_image
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-i', '--input', type=str, default=src_image)
-parser.add_argument('-o', '--output', type=str, default=result_image)
+parser.add_argument('-i', '--input', type=str, default=src_path)
+parser.add_argument('-o', '--output', type=str, default=result_path)
 parser.add_argument('-is_save', '--is_save', type=bool, default=True)
 args = parser.parse_args()
 
 
 if __name__ == '__main__':
-    if args.input is None:
-        dehaze('image/canon3.bmp')
-    else:
-        dehaze(args.input, args.output, args.is_save)
+
+    image_list = glob.glob( args.input )
+    for index, image_file in enumerate(image_list):
+        dehaze(image_file, args.output, args.is_save)

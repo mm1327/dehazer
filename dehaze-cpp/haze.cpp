@@ -4,22 +4,25 @@
 
 Haze::Haze()
 {
-    percent = 0.01;
+    percent = 0.1;
     minTrans = 0.25;
     guidedKernel = 10;
     darkKernel = 3;
     guidedE = 0.000001;
+    gammaGain = 0.8;
 }
 
 void Haze::dehaze( cv::Mat &src_image, cv::Mat &dehaze_image )
 {
     float scale = 1/255.0;
     float atom_mean = 0.0;
+    float avg_mean = 0.0;
+    float gamma = 0.8;
     cv::Mat img_gray;
 
     cv::cvtColor( src_image, img_gray, cv::COLOR_BGR2GRAY );
 
-    get_atmo( img_gray, atom_mean, percent );
+    get_atmo( img_gray, atom_mean, avg_mean, percent );
 
     cv::Mat image_f;
 
@@ -43,7 +46,7 @@ void Haze::dehaze( cv::Mat &src_image, cv::Mat &dehaze_image )
 
     trans_guided = cv::max( trans_guided, minTrans );
 
-    dehaze_image = cv::Mat::zeros( src_image.rows, src_image.cols, CV_8UC3 );
+    cv::Mat s_dehaze_image = cv::Mat::zeros( src_image.rows, src_image.cols, CV_8UC3 );
 
     int i;
     int j;
@@ -55,12 +58,12 @@ void Haze::dehaze( cv::Mat &src_image, cv::Mat &dehaze_image )
     int cp_v_b;
     int cp_v_g;
     int cp_v_r;
-    for( i = 0; i < dehaze_image.rows; ++i )
+    for( i = 0; i < s_dehaze_image.rows; ++i )
     {
-        line_de = dehaze_image.ptr<uchar>(i);
+        line_de = s_dehaze_image.ptr<uchar>(i);
         line_src = src_image.ptr<uchar>(i);
         line_guid = trans_guided.ptr<float>(i);
-        for( j  = 0; j < dehaze_image.cols; ++j )
+        for( j  = 0; j < s_dehaze_image.cols; ++j )
         {
             guid_pix = line_guid[ j ];
             pix_channel = line_src[ j * 3     ] * scale;
@@ -79,15 +82,17 @@ void Haze::dehaze( cv::Mat &src_image, cv::Mat &dehaze_image )
             line_de[ j * 3 + 2 ] = cp_v_r;
         }
     }
+    gamma = 1.0 - gammaGain * ( atom_mean - avg_mean );
+    gamma_lut( s_dehaze_image, dehaze_image, gamma );
 }
 
-void Haze::set_param( float st_percent, float min_trans, int guide_kernel, int dark_kernel, float e )
+void Haze::set_param(float st_percent, float min_trans, int guide_kernel, int dark_kernel, float gammaGain )
 {
     percent = st_percent;
     minTrans = min_trans;
     guidedKernel = guide_kernel;
     darkKernel = dark_kernel;
-    guidedE = e;
+    gammaGain = gammaGain;
 }
 
 void Haze::dark_channel(cv::Mat &image, cv::Mat &dc_img, int kernel_size )
@@ -104,7 +109,7 @@ void Haze::dark_channel(cv::Mat &image, cv::Mat &dc_img, int kernel_size )
     }
 }
 
-void Haze::get_atmo(cv::Mat &gray_image, float &atmo_mena, float percent)
+void Haze::get_atmo(cv::Mat &gray_image, float &atmo_mena, float &avg_mean, float percent)
 {
     cv::Mat hist;
 
@@ -114,17 +119,20 @@ void Haze::get_atmo(cv::Mat &gray_image, float &atmo_mena, float percent)
     float pix_size = 0;
     float bus_value = 0;
     int cur_pix_size;
+    float glog_value = 0;
     for( int pix_index = 255; pix_index > 1; --pix_index )
     {
         cur_pix_size = hist.at<int>(pix_index);
-        pix_size += cur_pix_size;
-        bus_value += cur_pix_size * pix_index;
-        if( pix_size > stit_size )
+        glog_value += cur_pix_size * pix_index;
+        if( pix_size < stit_size )
         {
-            break;
+
+            pix_size += cur_pix_size;
+            bus_value += cur_pix_size * pix_index;
         }
     }
     atmo_mena = bus_value / ( pix_size * 255.0 );
+    avg_mean = glog_value / ( gray_image.cols * gray_image.rows * 255.0 );
 }
 
 void Haze::get_trans( cv::Mat &image, cv::Mat &image_t, float atom, float w )
@@ -201,6 +209,21 @@ void Haze::hist_gray( const cv::Mat &gray_image, cv::Mat &hist )
     }
 }
 
+
+void Haze::gamma_lut( const cv::Mat &input_image, cv::Mat &out_image, float gamma )
+{
+    uchar lutData[256];
+
+    for (int i = 0; i<256; i++)
+    {
+         lutData[i] = pow((float)(i/255.0), gamma) * 255.0;
+    }
+    cv::Mat lut(1, 256, CV_8UC1, lutData);
+
+
+    cv::LUT(input_image, lut, out_image);
+
+}
 
 
 

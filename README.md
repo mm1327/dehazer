@@ -7,7 +7,7 @@ Realizing Kaiming He's paper 'Single Image Haze Removal Using Dark Channel Prior
 - 改进原算法对大气光强计算算法
 - 优化参数提升暗通道精度
 - 优化参数提升透光率精度
-
+- 加入GAMMA亮度增强
 
 去雾前 | 去雾后 | 优化后
 ------------- | ------------- | -------------
